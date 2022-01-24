@@ -1,4 +1,4 @@
-# MOVIES ANALYSIS - APPLIED PREDICTIVE ANALYTICS
+# MOVIES ANALYSIS - APPLIED PREDICTIVE ANALYTICS - R Language
 ###### tags: `SMU`,`R`,`statistics`,`multiple regression`,`AIC`,`data cleaning`,`predictive analysis`,`logit regression`,`coefficients`,`standard deviation`,`R markdown`,`rmd`
 ## Introduction
 
