@@ -1,5 +1,5 @@
 # MOVIES ANALYSIS - APPLIED PREDICTIVE ANALYTICS
-###### tags: `SMU`,`R`,`statistics`,`multiple regression`,`AIC`,`data cleaning`,`predictive analysis`,`logit regression`,`coefficients`,`standard deviation`
+###### tags: `SMU`,`R`,`statistics`,`multiple regression`,`AIC`,`data cleaning`,`predictive analysis`,`logit regression`,`coefficients`,`standard deviation`,`R markdown`,`rmd`
 ## Introduction
 
 Rating is common basis for movie selection. Thus, the goal of this analysis is to find the possible factors that will affect the rates of movies, such as popularity, genre, and budget. For this purpose, we obtained the Movies Dataset from Kaggle, and we run a logistic regression to find out the key variables that leads to a successful movie. Our results show that “Educational” genre and popularity have a statistically significant effect on movies’ rating.
