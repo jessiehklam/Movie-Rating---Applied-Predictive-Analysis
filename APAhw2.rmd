@@ -1,0 +1,404 @@
+---
+title: "APA HW2"
+author: "fcl"
+date: "11/21/2021"
+output:
+  
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+
+
+## R Markdown
+Package Load
+```{r message=FALSE}
+options(warn=-1)
+library(tidyverse)
+library(scales)
+library(jsonlite)
+library(knitr)
+library(kableExtra)
+library(ggrepel)
+library(gridExtra)
+library(lubridate)
+library(tidytext)
+library(wordcloud)
+library(recommenderlab)
+# remotes::install_github("rstudio/gt")
+library(gt)
+library(tidyverse)
+library(data.table)
+library(jsonlite)
+library(lubridate)
+library(tidyr)
+library(ggpubr)
+library(corrplot)
+library(RColorBrewer)
+```
+
+
+DATA Prep
+```{r}
+df <- fread("C:/Users/user/Desktop/SMU/Fall Modual B/Applied Predictive Analytics/HW2/movies_metadata.csv", fill=T)
+
+```
+
+
+
+```{r}
+#install.packages('tm')
+#library(tm)
+#library(tmap)
+#docs <- Corpus(VectorSource(df$title))
+# Convert the text to lower case
+# docs <- tm_map(docs, content_transformer(tolower))
+# # Remove numbers
+# docs <- tm_map(docs, removeNumbers)
+# # Remove english common stopwords
+# docs <- tm_map(docs, removeWords, stopwords("english"))
+# # Remove your own stop word
+# # specify your stopwords as a character vector
+# docs <- tm_map(docs, removeWords, c("blabla1", "blabla2"))
+# # Remove punctuations
+# docs <- tm_map(docs, removePunctuation)
+# # Eliminate extra white spaces
+# docs <- tm_map(docs, stripWhitespace)
+# # Text stemming
+# # docs <- tm_map(docs, stemDocument)
+# dtm <- TermDocumentMatrix(docs)
+# m <- as.matrix(dtm)
+# v <- sort(rowSums(m),decreasing=TRUE)
+# d <- data.frame(word = names(v),freq=v)
+# head(d, 10)
+# 
+# 
+# set.seed(1234) 
+# wordcloud(words = d$word, freq = d$freq, min.freq = 1, max.words=200, random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+```
+
+
+
+#clean genres
+```{r}
+#df[, genres := gsub("\'","\"", df$genres)]
+#df[, production_countries  := gsub("\'","\"", df$production_countries )]
+#genres <- df[, unlist(lapply(genres, fromJSON), recursive=F)['name'], by=id]
+#genres<-genres %>% distinct(id, .keep_all = TRUE)
+#head(genres)
+
+#--------------------------------
+library(tidyverse)
+library(stringr)
+library(dplyr)
+
+meta = read.csv("C:/Users/user/Desktop/SMU/Fall Modual B/Applied Predictive Analytics/HW2/movies_metadata.csv")
+
+temp = head(meta)
+temp = meta
+
+out = str_match_all(temp$genres,"name': \\'(.*?)\\'")
+
+out_clean = lapply(1:length(out), function(i) out[[i]][,2])
+
+out_df = plyr::ldply(out_clean, rbind)
+
+out_df$id = temp$id
+out_long = pivot_longer(out_df,cols = 1:8) %>%
+  select(-name) %>%
+  rename(genre = value) %>%
+  filter(!is.na(genre))
+
+#Notice some random errors in the data
+table(out_long$genre)
+
+#Remove genres that occur less than 1000 times in the data
+out_long_sum = out_long %>% 
+  group_by(genre) %>%
+  summarise(count = n()) %>%
+  filter(count >= 1000)
+
+out_long = out_long %>% filter(genre %in% out_long_sum$genre)
+
+out_wide = out_long %>% 
+  mutate(count = 1) %>%
+  group_by(id) %>%
+  mutate(row = row_number())
+
+#For genres, I assume that they are ranked in the order of importance. I only want to keep the  most important genre for each movie.
+g_set<- out_wide %>% filter(row == 1 )
+g_set <- g_set %>% select(-row,-count)
+```
+
+
+```{r}
+temp = meta
+
+cntr = str_match(temp$production_countries, "\\: \\'(.*?)\\'")
+```
+
+
+```{r}
+data<-df[,c('id','adult','title','budget','popularity','release_date','original_language','revenue','runtime','vote_average','vote_count','video')]
+head(data)
+
+df2<-merge(x=data,y=g_set,by="id")
+head(df2)
+
+df2<-df2 %>% drop_na()
+
+c<-mean(df2$vote_average)
+m<-quantile(df2$vote_count, 0.5)
+df2$weighted_rate<-round((df2$vote_average*df2$vote_count+c*m)/(df2$vote_count+m),digits = 2)
+
+str(df2)
+
+# write.csv(df2,"C:/Users/user/Desktop/SMU/Fall Modual B/Applied Predictive Analytics/HW2/movies2.csv", row.names = FALSE)
+# nrow(df2)
+
+#df2<-read.csv("C:/Users/chenl/OneDrive - Southern Methodist University/MAST6251 Applied Predictive Analytics/HW2/movies.csv", header=T)
+
+# cor(df2$vote_average,df2$vote_count)
+```
+
+
+```{r}
+df2$return <- if (df2$budget == 0) {0} else {df2$revenue/as.numeric(df2$budget)}
+```
+
+
+
+
+# EDA
+#1.Genres 
+
+```{r}
+x <- g_set %>% 
+  group_by(genre) %>% 
+  count() 
+
+#1.1 number of movies by genre
+g_set %>% group_by(genre) %>% count() %>% 
+  ggplot(aes(x=reorder(genre,n), y=n))+
+  geom_col(aes(fill=n),colour = "black")+
+  coord_flip()+
+  labs(x="",y="Number of Movies")
+#ggplot(df2, aes(x=as.factor(genre), fill=as.factor(genre) )) + 
+#  geom_bar( ) +
+#  scale_fill_hue(c = 40) +
+#  theme(legend.position="none",
+#        axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1,face="bold",size = 10.5))
+```
+
+```{r fig.height=30, fig.width=12}
+#1.2 Highest rated movies by genre
+g_set2 <- df2 %>% select(id,title,genre, vote_count, vote_average, weighted_rate)
+#str(g_set2)
+range(df2$weighted_rate)
+g_set2 %>% group_by(genre) %>% arrange(desc(weighted_rate)) %>% slice(1:10) %>%
+        ggplot(aes(x=reorder(title, weighted_rate), y=weighted_rate)) +
+        geom_col(aes(fill=genre), show.legend = FALSE) + 
+        coord_flip(y=c(6,9)) +
+        facet_wrap(~genre, scales = "free_y", ncol=2,) +
+        labs(x="", y="") +
+        theme(axis.text.y = element_text(size=10, face= 'bold'))
+```
+#2 Votes
+```{r}
+#2.1 vote_count
+
+#range(df2$vote_count)
+
+df2 %>% ggplot(aes(x=vote_count)) +
+        geom_histogram(binwidth = 50) +
+        scale_x_continuous(breaks=seq(0, 2500, by=500), label=comma) +
+        coord_cartesian(x=c(0, 2500)) +
+        labs(x="number of votes", y="number of movies")
+```
+
+#2.2 MOvies with highes number of votes
+```{r }
+
+#top 25 voted movie
+
+c <- df2 %>% top_n(25, wt=vote_count)
+      
+ggplot(c,aes(x=reorder(title, vote_count), y=vote_count)) +
+        geom_bar(stat='identity', aes(fill=c$vote_count)) + 
+        coord_flip(y=c(0, 15000)) +
+        labs(x="", y="Number of votes") +
+        geom_text(aes(label=vote_count), hjust=-0.1, size=3) +
+        geom_text(aes(label=weighted_rate), y=1000, size=3, col="green")
+```
+#2.3 Vote Average
+```{r}
+df2 %>%
+        ggplot(aes(x=vote_average)) +
+        geom_histogram(fill="3333cc", binwidth = 0.1) +
+        scale_x_continuous(breaks=seq(0, 10, by=1)) +
+        labs(x="vote average", y="number of movies")
+
+psych::skew(df2$vote_average)
+psych::kurtosi(df2$vote_average)
+```
+#3.Release Year
+```{r}
+df2$release_year <- year(as.Date(df2$release_date))
+NumM <- df2 %>% group_by(release_year) %>% count()
+
+#aes(fill=NumM) binwidth = 1
+
+plotly::ggplotly(df2 %>%
+        ggplot(aes(x=release_year)) +
+        geom_histogram(fill="blue",binwidth = 1) +
+        labs(x="Release year", y="Number of movies"))
+```
+
+
+#4 Original Language
+```{r}
+df_uniq <- unique(df2$original_language)
+length(df_uniq)
+# There are over 93 languages represented in our dataset. 
+df2$original_language<-as.factor(df2$original_language)
+plot(df2$original_language)
+#head(sort(table(df2['original_language']), decreasing = TRUE),10)
+# As we had expected, English language films form the overwhelmingly majority. French and Italian movies come at a very distant second and third respectively. Japanese and Hindi form the majority as far as Asian Languages are concerned.
+
+```
+
+
+
+
+#Model
+
+#data prep
+```{r}
+Entertaiment <- c('Comedy','Drama',"Animation","Mystery","Family","Romance")
+Action <- c("Horror","Thriller","Action","Crime","Western","Adventure" )
+Educational <- c("Documentary","History","War")
+Others<- c("Fantasy","Foreign","Science Fiction","Music")
+
+df2$genre[df2$genre %in%  Entertaiment ] <- "Entertaiment"
+df2$genre[df2$genre %in%  Action ] <- "Action"
+df2$genre[df2$genre %in%  Educational ] <- "Educational"
+df2$genre[df2$genre %in%  Others ] <- "Others"
+
+#plot(df2$budget, df2$revenue)
+
+df3 <- df2[,c('budget','popularity','runtime','genre','vote_average','vote_count')]
+df3$budget <- as.numeric(df3$budget)
+df3$popularity <- as.numeric(df3$popularity)
+df3$genre <- as.factor(df3$genre)
+str(df3)
+
+df3$vote_average <- ifelse(df3$vote_average >=7,'G','B')
+df3$vote_average <- as.factor(df3$vote_average)
+
+
+```
+
+#data Partition
+```{r}
+library(e1071)
+set.seed(1)
+# Use 70% 30% data set as training set, test set respectively
+p<-sample(1:nrow(df3),size=0.7*nrow(df3))
+
+
+TRAIN <- df3[p,]
+TEST <- df3[-p,]
+
+```
+
+
+#logit Regression
+```{r}
+# We have decied to use the vote_average to judge whether a movie is good or not.
+# If the vote_average is greater or equal to 7, the movie is worth to watch, otherwise we do not recommend to spend the time on that movie
+
+# use glm() (general linear model) with family = "binomial" to fit a logistic regression.
+LogitReg1 <- glm(vote_average~., data = TRAIN,family = binomial)
+
+summary(LogitReg1)
+```
+
+###Score the validation data (predict) using the model. Produce a confusion table and an ROC curve for the scored validation data.
+```{r}
+library(pROC)
+
+logit.pred1 <- predict(LogitReg1, newdata = TEST,type='response')
+
+#ROC Curve and AUC
+roc(TEST$vote_average,logit.pred1 )
+plot(roc(TEST$vote_average,logit.pred1 ),main='Logit Regresssion')
+A <- auc(roc(TEST$vote_average,logit.pred1 ))
+A
+
+
+#Confusion Matrix
+library(caret)
+cmlogit <- confusionMatrix(as.factor(ifelse(logit.pred1 > 0.5,'G','B')),TEST$vote_average)
+cmlogit
+```
+
+##KEY Metrics From Confusion Table
+```{r}
+CFMetricsLogit<- data.frame(matrix(nrow=7,ncol=1))
+rownames(CFMetricsLogit)<- c('accuracy', 'misclassification rate', 'true positive rate', 'false positive rate', 'specificity', 'precision', 'prevalence')
+
+#cm$overall
+CFMetricsLogit[1,1]<- round(cmlogit$overall[1],5) #cmlogit$overall
+CFMetricsLogit[2,1]<- 1-CFMetricsLogit[1,1] #'misclassification rate'
+#tpr = tp / (tp + fn)
+#fpr = fp / (fp + tn)
+tp<- cmlogit$table[1,1]
+fn<- cmlogit$table[1,2]
+fp<- cmlogit$table[2,1]
+tn<- cmlogit$table[2,2]
+CFMetricsLogit[3,1]<- tp / (tp + fn) #tpr
+CFMetricsLogit[4,1]<- fp / (fp + tn) #fpr
+
+
+CFMetricsLogit[5,1]<- cmlogit$byClass[2] #Specificity
+CFMetricsLogit[6,1]<- cmlogit$byClass[5] #precision
+CFMetricsLogit[7,1]<- cmlogit$byClass[8] #prevalence
+
+colnames(CFMetricsLogit)<- c('Metrics')
+CFMetricsLogit
+```
+
+```{r}
+p2 <- ggplot(df2, aes(x=as.Date(release_date), y=revenue)) +
+  geom_line(color="turquoise4") + 
+  labs(x="",y="revenue")+
+  theme_minimal()
+p2
+
+p3 <- ggplot(df2, aes(x=as.Date(release_date), y=runtime)) +
+  geom_line(color="turquoise4") + 
+  labs(x="",y="runtime")+
+  theme_minimal()
+p3
+
+p4 <- ggplot(df2, aes(x=as.Date(release_date), y=budget)) +
+  geom_dotplot(color="turquoise4",aes()) + 
+  labs(x="",y="budget")+
+  theme_minimal()
+p4
+
+p5 <- ggplot(df2, aes(x=as.Date(release_date), y=weighted_rate)) +
+  geom_line(color="turquoise4") + 
+  labs(x="",y="weighted_rate")+
+  theme_minimal()
+p5
+```
+
+
+
+
